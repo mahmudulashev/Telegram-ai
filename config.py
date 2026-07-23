@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Telegram API Credentials
+# Telegram API Credentials\
 API_ID_RAW = os.getenv("API_ID")
 API_HASH = os.getenv("API_HASH")
 
