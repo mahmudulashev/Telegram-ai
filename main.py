@@ -32,20 +32,25 @@ CATEGORY_BADGES = {
 # Restore Telegram Pyrogram session from Environment Variable if deployed on Cloud (Koyeb/Render)
 session_file = f"{config.SESSION_NAME}.session"
 session_b64_env = os.getenv("SESSION_BASE64")
-if session_b64_env and not os.path.exists(session_file):
+session_str_env = os.getenv("SESSION_STRING")
+
+if session_b64_env:
     try:
         logging.info("Restoring Pyrogram session from SESSION_BASE64 environment variable...")
         with open(session_file, "wb") as f:
-            f.write(base64.b64decode(session_b64_env))
-        logging.info("Session file restored successfully!")
+            f.write(base64.b64decode(session_b64_env.strip()))
+        logging.info("Session file restored successfully from SESSION_BASE64!")
     except Exception as e:
         logging.error(f"Failed to restore session from SESSION_BASE64: {e}")
+elif not session_str_env and not os.path.exists(session_file):
+    logging.warning("⚠️ WARNING: SESSION_BASE64 or SESSION_STRING environment variable is NOT set on Cloud server!")
 
 # Initialize Pyrogram Userbot Client
 app = Client(
     name=config.SESSION_NAME,
     api_id=config.API_ID,
-    api_hash=config.API_HASH
+    api_hash=config.API_HASH,
+    session_string=session_str_env if session_str_env else None
 )
 
 @app.on_message(filters.chat(config.ADMIN_CHAT_ID) & filters.command("learn", prefixes=["/", ".", "!"]) & ~filters.bot)
