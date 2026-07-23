@@ -29,6 +29,18 @@ CATEGORY_BADGES = {
     "Casual": "🟡 <b>SUHBAT / OILAVIY (CASUAL)</b>"
 }
 
+# Restore Telegram Pyrogram session from Environment Variable if deployed on Cloud (Koyeb/Render)
+session_file = f"{config.SESSION_NAME}.session"
+session_b64_env = os.getenv("SESSION_BASE64")
+if session_b64_env and not os.path.exists(session_file):
+    try:
+        logging.info("Restoring Pyrogram session from SESSION_BASE64 environment variable...")
+        with open(session_file, "wb") as f:
+            f.write(base64.b64decode(session_b64_env))
+        logging.info("Session file restored successfully!")
+    except Exception as e:
+        logging.error(f"Failed to restore session from SESSION_BASE64: {e}")
+
 # Initialize Pyrogram Userbot Client
 app = Client(
     name=config.SESSION_NAME,
@@ -395,18 +407,6 @@ async def main():
     """Main application startup procedure."""
     logger.info("Initializing SQLite database...")
     await db.init_db()
-
-    # Restore Telegram Pyrogram session from Environment Variable if deployed on Cloud (Koyeb/Render)
-    session_file = f"{config.SESSION_NAME}.session"
-    session_b64_env = os.getenv("SESSION_BASE64")
-    if session_b64_env and not os.path.exists(session_file):
-        try:
-            logger.info("Restoring Pyrogram session from SESSION_BASE64 environment variable...")
-            with open(session_file, "wb") as f:
-                f.write(base64.b64decode(session_b64_env))
-            logger.info("Session file restored successfully!")
-        except Exception as e:
-            logger.error(f"Failed to restore session from SESSION_BASE64: {e}")
 
     logger.info("Starting Pyrogram Userbot Client...")
     await app.start()
