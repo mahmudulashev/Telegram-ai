@@ -39,8 +39,14 @@ else:
         ADMIN_CHAT_ID = ADMIN_CHAT_RAW
 
 # Userbot Settings
-SESSION_NAME = os.getenv("SESSION_NAME", "userbot_session")
-DB_PATH = os.getenv("DB_PATH", "userbot.db")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SESSION_NAME = os.getenv("SESSION_NAME", os.path.join(BASE_DIR, "userbot_session"))
+DB_PATH = os.getenv("DB_PATH")
+if not DB_PATH:
+    DB_PATH = os.path.join(BASE_DIR, "userbot.db")
+else:
+    DB_PATH = os.path.abspath(DB_PATH)
+
 ENABLE_TELEGRAM_BRAIN_BACKUP = os.getenv("ENABLE_TELEGRAM_BRAIN_BACKUP", "false").lower() == "true"
 ENABLE_TELEGRAM_NOTIFICATIONS = os.getenv("ENABLE_TELEGRAM_NOTIFICATIONS", "false").lower() == "true"
 
