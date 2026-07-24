@@ -48,12 +48,17 @@ class SetAutopilotRequest(BaseModel):
     expires_at: Optional[int] = None
     hours: Optional[int] = None
 
+import datetime
+
 async def auto_sync_recent_dialogs(client):
-    """Auto-populate recent Telegram dialogs into local DB if feed is empty."""
+    """Auto-populate recent Telegram dialogs into local DB ONLY if from last 24 hours or unread."""
     if not client:
         return
     try:
-        async for dialog in client.get_dialogs(limit=25):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        twenty_four_hours_ago = now - datetime.timedelta(hours=24)
+
+        async for dialog in client.get_dialogs(limit=20):
             chat = dialog.chat
             if getattr(chat, 'type', None) and chat.type.value in ["private", "bot"]:
                 first_name = getattr(chat, "first_name", "") or ""
@@ -63,6 +68,15 @@ async def auto_sync_recent_dialogs(client):
                 async for msg in client.get_chat_history(chat.id, limit=1):
                     if not msg.text:
                         continue
+                    
+                    # Date & Unread Filter: Skip old messages (>24h) that have no unread count
+                    msg_date_utc = msg.date.replace(tzinfo=datetime.timezone.utc) if msg.date and not msg.date.tzinfo else msg.date
+                    is_recent = msg_date_utc and (msg_date_utc >= twenty_four_hours_ago)
+                    is_unread = getattr(dialog, 'unread_messages_count', 0) > 0
+
+                    if not is_recent and not is_unread:
+                        continue
+
                     is_outgoing = msg.outgoing or (msg.from_user and getattr(msg.from_user, 'is_self', False))
                     await db.save_historical_message(
                         user_id=chat.id,
