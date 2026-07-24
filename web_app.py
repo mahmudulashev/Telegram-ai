@@ -48,6 +48,36 @@ class SetAutopilotRequest(BaseModel):
     expires_at: Optional[int] = None
     hours: Optional[int] = None
 
+async def auto_sync_recent_dialogs(client):
+    """Auto-populate recent Telegram dialogs into local DB if feed is empty."""
+    if not client:
+        return
+    try:
+        async for dialog in client.get_dialogs(limit=25):
+            chat = dialog.chat
+            if getattr(chat, 'type', None) and chat.type.value in ["private", "bot"]:
+                first_name = getattr(chat, "first_name", "") or ""
+                last_name = getattr(chat, "last_name", "") or ""
+                username = getattr(chat, "username", "") or ""
+
+                async for msg in client.get_chat_history(chat.id, limit=1):
+                    if not msg.text:
+                        continue
+                    is_outgoing = msg.outgoing or (msg.from_user and getattr(msg.from_user, 'is_self', False))
+                    await db.save_historical_message(
+                        user_id=chat.id,
+                        user_msg_id=msg.id,
+                        first_name=first_name,
+                        last_name=last_name,
+                        username=username,
+                        incoming_text=msg.text,
+                        category="Casual",
+                        summary=msg.text[:100],
+                        status="replied" if is_outgoing else "pending"
+                    )
+    except Exception as e:
+        logger.warning(f"Auto-sync dialogs error: {e}")
+
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard(request: Request):
     """Render main Web UI Dashboard."""
@@ -57,6 +87,10 @@ async def serve_dashboard(request: Request):
 async def get_dashboard_stats():
     """Return system statistics for charts and dashboard cards."""
     stats = await db.get_stats()
+    if stats.get("total_messages", 0) == 0 and pyrogram_client:
+        await auto_sync_recent_dialogs(pyrogram_client)
+        stats = await db.get_stats()
+
     status_info = {
         "status": "Online",
         "model": config.OPENAI_MODEL,
@@ -68,6 +102,9 @@ async def get_dashboard_stats():
 async def get_dashboard_messages(limit: int = 50):
     """Return message feed for the dashboard."""
     messages = await db.get_all_messages(limit=limit)
+    if not messages and pyrogram_client:
+        await auto_sync_recent_dialogs(pyrogram_client)
+        messages = await db.get_all_messages(limit=limit)
     return JSONResponse({"messages": messages})
 
 @app.get("/api/chat/{message_id}")

@@ -230,13 +230,13 @@ async def sync_and_learn_all(pyrogram_client: Client) -> Dict[str, Any]:
         profile_text = await analyze_overall_profile(all_my_messages)
         await db.save_user_profile(profile_text)
 
-    # Clean up dummy imported messages from main feed table
-    cleared_count = await db.clear_historical_messages()
+    # Keep messages in DB feed for Dashboard display
+    cleared_count = 0
 
     return {
         "contacts_analyzed": contacts_count,
         "my_messages_analyzed": len(all_my_messages),
         "facts_learned": len(learned_facts),
-        "cleared_feed_items": cleared_count,
+        "cleared_feed_items": 0,
         "profile_summary": profile_text
     }
