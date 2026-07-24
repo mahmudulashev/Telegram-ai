@@ -272,12 +272,21 @@ async def cancel_message_draft(admin_msg_id: int) -> bool:
             return False
 
 async def get_all_messages(limit: int = 50) -> List[Dict[str, Any]]:
-    """Get latest messages for the Web UI dashboard."""
+    """Get latest message per user/chat for the Web UI dashboard feed."""
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        async with db.execute(
-            "SELECT * FROM messages ORDER BY created_at DESC, id DESC LIMIT ?", (limit,)
-        ) as cursor:
+        query = """
+            SELECT m.*
+            FROM messages m
+            INNER JOIN (
+                SELECT user_id, MAX(id) as max_id
+                FROM messages
+                GROUP BY user_id
+            ) latest ON m.user_id = latest.user_id AND m.id = latest.max_id
+            ORDER BY m.id DESC
+            LIMIT ?
+        """
+        async with db.execute(query, (limit,)) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
