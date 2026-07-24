@@ -58,7 +58,14 @@ async def auto_sync_recent_dialogs(client):
         now = datetime.datetime.now(datetime.timezone.utc)
         twenty_four_hours_ago = now - datetime.timedelta(hours=24)
 
+        dialogs_to_sync = []
         async for dialog in client.get_dialogs(limit=20):
+            dialogs_to_sync.append(dialog)
+
+        # Reverse so oldest dialog is inserted first, newest is inserted last (getting highest ID)
+        dialogs_to_sync.reverse()
+
+        for dialog in dialogs_to_sync:
             chat = dialog.chat
             if getattr(chat, 'type', None) and chat.type.value in ["private", "bot"]:
                 first_name = getattr(chat, "first_name", "") or ""
@@ -78,6 +85,7 @@ async def auto_sync_recent_dialogs(client):
                         continue
 
                     is_outgoing = msg.outgoing or (msg.from_user and getattr(msg.from_user, 'is_self', False))
+                    date_str = msg.date.strftime("%Y-%m-%d %H:%M:%S") if msg.date else None
                     await db.save_historical_message(
                         user_id=chat.id,
                         user_msg_id=msg.id,
@@ -87,7 +95,8 @@ async def auto_sync_recent_dialogs(client):
                         incoming_text=msg.text,
                         category="Casual",
                         summary=msg.text[:100],
-                        status="replied" if is_outgoing else "pending"
+                        status="replied" if is_outgoing else "pending",
+                        created_at=date_str
                     )
     except Exception as e:
         logger.warning(f"Auto-sync dialogs error: {e}")

@@ -134,7 +134,8 @@ async def save_historical_message(
     category: str,
     summary: str,
     status: str = 'replied',
-    response_text: Optional[str] = None
+    response_text: Optional[str] = None,
+    created_at: Optional[str] = None
 ) -> bool:
     """Save a historical Telegram message into DB safely without duplicate admin_msg_id."""
     async with aiosqlite.connect(DB_PATH) as db:
@@ -148,18 +149,32 @@ async def save_historical_message(
             
             dummy_admin_msg_id = -(abs(user_id) * 1000000 + user_msg_id)
             
-            await db.execute(
-                """
-                INSERT INTO messages (
-                    admin_msg_id, user_id, user_msg_id, first_name, last_name, 
-                    username, incoming_text, category, summary, status, response_text
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    dummy_admin_msg_id, user_id, user_msg_id, first_name, last_name,
-                    username, incoming_text, category, summary, status, response_text
+            if created_at:
+                await db.execute(
+                    """
+                    INSERT INTO messages (
+                        admin_msg_id, user_id, user_msg_id, first_name, last_name, 
+                        username, incoming_text, category, summary, status, response_text, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        dummy_admin_msg_id, user_id, user_msg_id, first_name, last_name,
+                        username, incoming_text, category, summary, status, response_text, created_at
+                    )
                 )
-            )
+            else:
+                await db.execute(
+                    """
+                    INSERT INTO messages (
+                        admin_msg_id, user_id, user_msg_id, first_name, last_name, 
+                        username, incoming_text, category, summary, status, response_text
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        dummy_admin_msg_id, user_id, user_msg_id, first_name, last_name,
+                        username, incoming_text, category, summary, status, response_text
+                    )
+                )
             await db.commit()
             return True
         except Exception as e:
@@ -261,7 +276,7 @@ async def get_all_messages(limit: int = 50) -> List[Dict[str, Any]]:
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
-            "SELECT * FROM messages ORDER BY id DESC LIMIT ?", (limit,)
+            "SELECT * FROM messages ORDER BY created_at DESC, id DESC LIMIT ?", (limit,)
         ) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
