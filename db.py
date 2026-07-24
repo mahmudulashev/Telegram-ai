@@ -63,6 +63,18 @@ CREATE TABLE IF NOT EXISTS autopilot (
     user_id INTEGER PRIMARY KEY,
     expires_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS autopilot_sent_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    timestamp INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS style_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rule TEXT NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 async def init_db():
@@ -552,3 +564,75 @@ async def clear_historical_messages() -> int:
         except Exception as e:
             logger.error(f"Failed to clear historical messages: {e}")
             return 0
+
+async def log_autopilot_response(user_id: int) -> bool:
+    """Log an autopilot response timestamp for rate limiting."""
+    import time
+    now = int(time.time())
+    async with aiosqlite.connect(DB_PATH) as db:
+        try:
+            await db.execute(
+                "INSERT INTO autopilot_sent_log (user_id, timestamp) VALUES (?, ?)",
+                (user_id, now)
+            )
+            # Cleanup entries older than 24 hours
+            cutoff = now - 86400
+            await db.execute("DELETE FROM autopilot_sent_log WHERE timestamp < ?", (cutoff,))
+            await db.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to log autopilot response: {e}")
+            return False
+
+async def is_autopilot_rate_limited(user_id: int, max_per_hour: int = 7) -> bool:
+    """Check if autopilot has reached max_per_hour limit in rolling 1-hour window."""
+    import time
+    now = int(time.time())
+    one_hour_ago = now - 3600
+    async with aiosqlite.connect(DB_PATH) as db:
+        try:
+            async with db.execute(
+                "SELECT COUNT(*) FROM autopilot_sent_log WHERE user_id = ? AND timestamp >= ?",
+                (user_id, one_hour_ago)
+            ) as cursor:
+                row = await cursor.fetchone()
+                count = row[0] if row else 0
+                return count >= max_per_hour
+        except Exception as e:
+            logger.error(f"Failed to check autopilot rate limit: {e}")
+            return False
+
+async def get_style_rules() -> List[Dict[str, Any]]:
+    """Retrieve all style/mimicry rules."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        try:
+            async with db.execute("SELECT * FROM style_rules ORDER BY created_at DESC") as cursor:
+                rows = await cursor.fetchall()
+                return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error(f"Failed to get style rules: {e}")
+            return []
+
+async def add_style_rule(rule: str) -> bool:
+    """Add a new style/mimicry rule."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        try:
+            await db.execute("INSERT OR IGNORE INTO style_rules (rule) VALUES (?)", (rule,))
+            await db.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to add style rule: {e}")
+            return False
+
+async def clear_style_rules() -> bool:
+    """Clear all style/mimicry rules."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        try:
+            await db.execute("DELETE FROM style_rules")
+            await db.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to clear style rules: {e}")
+            return False
+

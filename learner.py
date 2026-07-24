@@ -158,6 +158,43 @@ async def run_learning_process(client: Client, status_msg: Message):
 
 import json
 
+LEARN_RULES_PROMPT = """
+Siz foydalanuvchining yozish uslubidan qoidalar ajratib oladigan ekspertsiz.
+Mahmudning yozishmalarini tahlil qiling va bot uni uslubini nusxalashi (mimic) uchun kerak bo'ladigan eng muhim 3-5 ta aniq qoidalarni JSON ro'yxatida qaytaring.
+Misol:
+{
+  "rules": [
+    "Hech qachon bosh harflardan foydalanmang (hammasi kichik harfda).",
+    "Jumlalar oxirida nuqta qo'ymang.",
+    "'xop', 'ha', 'ok' kabi qisqa so'zlarni ko'p ishlating."
+  ]
+}
+"""
+
+async def extract_style_rules(all_my_messages: List[str]) -> List[str]:
+    if not all_my_messages:
+        return []
+    
+    text_data = "\n".join([f"- {msg}" for msg in all_my_messages[:200]])
+    try:
+        response = await client_llm.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": LEARN_RULES_PROMPT},
+                {"role": "user", "content": f"Xabarlar:\n{text_data}"}
+            ],
+            response_format={"type": "json_object"},
+            max_completion_tokens=300
+        )
+        raw_text = response.choices[0].message.content.strip()
+        if raw_text.startswith("```"):
+            raw_text = raw_text.split("```")[1].replace("json", "").strip()
+        res_json = json.loads(raw_text)
+        return res_json.get("rules", [])
+    except Exception as e:
+        logger.error(f"Failed to extract style rules: {e}")
+        return []
+
 LEARN_FACTS_PROMPT = """
 Siz foydalanuvchilar suhbatidan muhim faktlarni ajratib oluvchi ekspertiz.
 Mahmud va uning kontakti o'rtasidagi yozishmalar beriladi.
@@ -234,11 +271,20 @@ async def sync_and_learn_all(pyrogram_client: Client) -> Dict[str, Any]:
                 await db.add_memory(0, fact)
                 learned_facts.append(fact)
 
-    # Analyze overall tone of voice
+    # Analyze overall tone of voice and style rules
     profile_text = "Odatiy uslub"
+    rules_learned = 0
     if all_my_messages:
         profile_text = await analyze_overall_profile(all_my_messages)
         await db.save_user_profile(profile_text)
+        
+        # Extract and save specific style rules
+        style_rules = await extract_style_rules(all_my_messages)
+        await db.clear_style_rules()
+        for rule in style_rules:
+            if isinstance(rule, str) and len(rule) > 3:
+                await db.add_style_rule(rule)
+                rules_learned += 1
 
     # Keep messages in DB feed for Dashboard display
     cleared_count = 0
@@ -247,6 +293,8 @@ async def sync_and_learn_all(pyrogram_client: Client) -> Dict[str, Any]:
         "contacts_analyzed": contacts_count,
         "my_messages_analyzed": len(all_my_messages),
         "facts_learned": len(learned_facts),
+        "rules_learned": rules_learned,
         "cleared_feed_items": 0,
         "profile_summary": profile_text
     }
+

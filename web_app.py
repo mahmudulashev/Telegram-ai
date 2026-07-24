@@ -162,6 +162,9 @@ async def process_web_chat(payload: WebChatRequest):
     admin_memories_data = await db.get_all_admin_memories()
     admin_memories_texts = [m['fact'] for m in admin_memories_data]
     web_chat_history = await db.get_web_chat_history(payload.message_id)
+    
+    style_rules_data = await db.get_style_rules()
+    style_rules_texts = [r['rule'] for r in style_rules_data]
 
     # Generate AI Response
     ai_response = await ai_agent.web_chat_response(
@@ -169,7 +172,8 @@ async def process_web_chat(payload: WebChatRequest):
         context=msg_context,
         recent_context=recent_context,
         past_memories=past_memories,
-        admin_memories=admin_memories_texts
+        admin_memories=admin_memories_texts,
+        style_rules=style_rules_texts
     )
 
     admin_reply_text = ai_response.get("admin_message", "Tahlil tugadi.")
@@ -225,6 +229,12 @@ async def send_web_draft(payload: SendDraftRequest):
     admin_msg_id = msg_context["admin_msg_id"]
 
     try:
+        # Mark chat history as read so sender sees 2 checkmarks (✓✓)
+        try:
+            await pyrogram_client.read_chat_history(target_user_id)
+        except Exception as e:
+            logger.debug(f"Could not mark history read from Web UI: {e}")
+
         # Send message to user via Pyrogram
         await pyrogram_client.send_message(
             chat_id=target_user_id,

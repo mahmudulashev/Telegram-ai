@@ -143,7 +143,7 @@ YANGI KELGAN XABAR MATNI: {message_text if message_text else '[Matnsiz rasm/medi
             "new_facts_to_remember": []
         }
 
-async def generate_response(admin_instruction: str, context: Dict[str, Any], recent_context: str = "", past_memories: List[str] = None, admin_memories: List[str] = None) -> Dict[str, Any]:
+async def generate_response(admin_instruction: str, context: Dict[str, Any], recent_context: str = "", past_memories: List[str] = None, admin_memories: List[str] = None, style_rules: List[str] = None) -> Dict[str, Any]:
     """
     Stage 2 AI Interactive Drafting & Response Generation
     """
@@ -160,6 +160,7 @@ async def generate_response(admin_instruction: str, context: Dict[str, Any], rec
 
     memories_block = f"SUDHABDOSH (KONTAKT) HAQIDAGI XOTIRALAR:\n" + "\n".join(past_memories) + "\n\n" if past_memories else ""
     admin_memories_block = f"MAHMUDNING (ADMIN) SIZGA QO'YGAN QAT'IY QOIDALARI (BUNGA SO'ZSIZ AMAL QILING, BU QONUN!):\n" + "\n".join(admin_memories) + "\n\n" if admin_memories else ""
+    style_rules_block = f"MAHMUDNING YOZISH USLUBI (MIMIC) QOIDALARI (MATN SHU QOIDALARGA 100% MOS BO'LISHI SHART!):\n" + "\n".join([f"- {r}" for r in style_rules]) + "\n\n" if style_rules else ""
 
     system_prompt = f"""{STAGE2_SYSTEM_PROMPT}
 
@@ -174,6 +175,7 @@ USHBU KONTAKT BILAN MUNOSABATINGIZ:
 
 {memories_block}
 {admin_memories_block}
+{style_rules_block}
 YUQORIDAGI USLUB VA MUNOSABATGA QAT'IY RIOYA QILING!
 """
 
@@ -218,7 +220,8 @@ async def web_chat_response(
     context: Dict[str, Any], 
     recent_context: str = "", 
     past_memories: List[str] = None,
-    admin_memories: List[str] = None
+    admin_memories: List[str] = None,
+    style_rules: List[str] = None
 ) -> Dict[str, Any]:
     """
     Stage 3: Interactive Web Chat Response
@@ -236,6 +239,7 @@ async def web_chat_response(
 
     memories_block = f"SUDHABDOSH (KONTAKT) HAQIDAGI XOTIRALAR:\n" + "\n".join(past_memories) + "\n\n" if past_memories else ""
     admin_memories_block = f"MAHMUDNING (ADMIN) SIZGA QO'YGAN QAT'IY QOIDALARI (BUNGA SO'ZSIZ AMAL QILING, BU QONUN!):\n" + "\n".join(admin_memories) + "\n\n" if admin_memories else ""
+    style_rules_block = f"MAHMUDNING YOZISH USLUBI (MIMIC) QOIDALARI (MATN SHU QOIDALARGA 100% MOS BO'LISHI SHART!):\n" + "\n".join([f"- {r}" for r in style_rules]) + "\n\n" if style_rules else ""
 
     system_prompt = f"""{STAGE2_SYSTEM_PROMPT}
 
@@ -249,6 +253,7 @@ USHBU KONTAKT BILAN MUNOSABATINGIZ:
 
 {memories_block}
 {admin_memories_block}
+{style_rules_block}
 YUQORIDAGI USLUB VA MUNOSABATGA QAT'IY RIOYA QILING!
 
 Siz hozir Mahmud bilan Web Sayt orqali jonli suhbatlashyapsiz.
