@@ -41,3 +41,7 @@ else:
 # Userbot Settings
 SESSION_NAME = os.getenv("SESSION_NAME", "userbot_session")
 DB_PATH = os.getenv("DB_PATH", "userbot.db")
+ENABLE_TELEGRAM_BRAIN_BACKUP = os.getenv("ENABLE_TELEGRAM_BRAIN_BACKUP", "false").lower() == "true"
+ENABLE_TELEGRAM_NOTIFICATIONS = os.getenv("ENABLE_TELEGRAM_NOTIFICATIONS", "false").lower() == "true"
+
+

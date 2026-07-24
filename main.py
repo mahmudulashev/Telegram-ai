@@ -150,124 +150,131 @@ async def handle_incoming_private_message(client: Client, message: Message):
     except Exception as e:
         logger.warning(f"Could not fetch recent history for context: {e}")
 
-    # Fetch past memories (Long-Term Memory)
-    past_memories = await db.get_memories(user.id, limit=10)
-
-    # Perform Stage 1 Uzbek & Vision AI Analysis
-    analysis = await ai_agent.analyze_message(
-        user_info=user_info, 
-        message_text=incoming_text, 
-        image_b64=image_b64,
-        recent_context=recent_context,
-        past_memories=past_memories
-    )
-
-    # Save any new facts to long-term memory database
-    new_facts = analysis.get("new_facts_to_remember", [])
-    for fact in new_facts:
-        if isinstance(fact, str) and len(fact) > 3 and "yo'q" not in fact.lower():
-            await db.add_memory(user.id, fact)
-            logger.info(f"Learned new fact about user {user.id}: {fact}")
-
-    category = analysis.get("category", "Casual")
-    badge = CATEGORY_BADGES.get(category, f"📌 <b>{category.upper()}</b>")
-    sender_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username or f"Foydalanuvchi {user.id}"
-    username_str = f"@{user.username}" if user.username else "Username yo'q"
-    contact_tag = "👤 Kontaktingizda saqlangan" if getattr(user, 'is_contact', False) else "👤 Noma'lum raqam"
-
     # Display Text for Card
     display_msg = incoming_text if incoming_text else "🖼️ [Rasm yuborildi]"
     if message.photo and incoming_text:
         display_msg = f"🖼️ [Rasm va matn]: {incoming_text}"
 
-    report = analysis.get('conversational_report', incoming_text)
-
     # ---------------- AUTOPILOT CHECK ----------------
     is_autopilot = await db.is_autopilot_active(user.id)
     
-    if is_autopilot and category == "Urgent":
-        await db.disable_autopilot(user.id)
-        is_autopilot = False
+    if is_autopilot:
+        # Fetch recent context and memories for autopilot AI analysis
+        recent_context = ""
         try:
-            await client.send_message(
+            history = []
+            async for msg in client.get_chat_history(user.id, limit=25):
+                if msg.id != message.id:
+                    is_me = msg.outgoing or (msg.from_user and getattr(msg.from_user, 'is_self', False))
+                    sender = "Siz (Mahmud)" if is_me else "Suhbatdosh"
+                    time_str = msg.date.strftime("%H:%M") if msg.date else ""
+                    text = msg.text or msg.caption or "[Media]"
+                    history.append(f"[{time_str}] {sender}: {text}")
+            if history:
+                history.reverse()
+                recent_context = "\n".join(history)
+        except Exception as e:
+            logger.warning(f"Could not fetch recent history for context: {e}")
+
+        past_memories = await db.get_memories(user.id, limit=10)
+        
+        analysis = await ai_agent.analyze_message(
+            user_info=user_info, 
+            message_text=incoming_text, 
+            image_b64=image_b64,
+            recent_context=recent_context,
+            past_memories=past_memories
+        )
+
+        category = analysis.get("category", "Casual")
+        report = analysis.get('conversational_report', incoming_text)
+
+        if category == "Urgent":
+            await db.disable_autopilot(user.id)
+            is_autopilot = False
+            if config.ENABLE_TELEGRAM_NOTIFICATIONS:
+                try:
+                    await client.send_message(
+                        chat_id=config.ADMIN_CHAT_ID,
+                        text=f"🚨 <b>AVTOPILOT TO'XTATILDI: SHOSHILINCH XABAR!</b>\n<i>Foydalanuvchi '{user.first_name or ''}' dan shoshilinch (Urgent) xabar kelgani uchun avtopilot bu odam uchun darhol o'chirildi!</i>",
+                        parse_mode=filters.enums.ParseMode.HTML
+                    )
+                except Exception as e:
+                    logger.error(f"Urgent override notification failed: {e}")
+
+        if is_autopilot:
+            dummy_admin_msg_id = -(message.id)
+            await db.save_incoming_message(
+                admin_msg_id=dummy_admin_msg_id,
+                user_id=user.id,
+                user_msg_id=message.id,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                username=user.username,
+                bio=bio,
+                incoming_text=display_msg,
+                category=category,
+                summary=report
+            )
+            msg_context = await db.get_message_by_admin_msg_id(dummy_admin_msg_id)
+            admin_memories = await db.get_all_admin_memories()
+            admin_memories_texts = [m['fact'] for m in admin_memories]
+
+            ai_response = await ai_agent.generate_response(
+                admin_instruction="Siz hozir AVTOPILOT rejimidasiz. Mahmud hozir band. Suhbatdosh bilan mantiqan to'g'ri, qoidalar va xotiralarga tayangan holda mustaqil javob yozib yuboring.",
+                context=msg_context,
+                recent_context=recent_context,
+                past_memories=past_memories,
+                admin_memories=admin_memories_texts
+            )
+            
+            draft_text = ai_response.get("draft_text", "")
+            if draft_text:
+                try:
+                    await client.send_message(chat_id=user.id, text=draft_text)
+                    await db.update_message_response(dummy_admin_msg_id, draft_text)
+                    logger.info(f"Autopilot sent response to {user.id}")
+                except Exception as e:
+                    logger.error(f"Autopilot failed to send message: {e}")
+            return # Skip manual flow
+
+    # ---------------- MANUAL / ON-DEMAND FLOW ----------------
+    # Save incoming message directly to SQLite database WITHOUT auto LLM analysis
+    category = "Casual"
+    report = display_msg
+
+    admin_msg_id = -(abs(user.id) * 1000000 + message.id)
+    if config.ENABLE_TELEGRAM_NOTIFICATIONS:
+        notification_card = (
+            f"🔔 <b>Yangi xabar:</b>\n\n"
+            f"<i>{report}</i>\n\n"
+            f"💬 Bunga nima deb javob qaytaray? Qisqacha aytsangiz, o'zim chiroyli qilib yozib yuboraman!"
+        )
+        try:
+            admin_msg = await client.send_message(
                 chat_id=config.ADMIN_CHAT_ID,
-                text=f"🚨 <b>AVTOPILOT TO'XTATILDI: SHOSHILINCH XABAR!</b>\n<i>Foydalanuvchi '{sender_name}' dan shoshilinch (Urgent) xabar kelgani uchun avtopilot bu odam uchun darhol o'chirildi!</i>",
+                text=notification_card,
                 parse_mode=filters.enums.ParseMode.HTML
             )
+            admin_msg_id = admin_msg.id
+            logger.info(f"Notification sent to Admin Chat. Admin Message ID: {admin_msg.id}")
+        except RPCError as e:
+            logger.error(f"Failed to send admin notification message: {e}")
         except Exception as e:
-            logger.error(f"Urgent override notification failed: {e}")
+            logger.error(f"Unexpected error in incoming message handler: {e}")
 
-    if is_autopilot:
-        # Save message to DB with dummy negative admin_msg_id
-        dummy_admin_msg_id = -(message.id)
-        await db.save_incoming_message(
-            admin_msg_id=dummy_admin_msg_id,
-            user_id=user.id,
-            user_msg_id=message.id,
-            first_name=user.first_name,
-            last_name=user.last_name,
-            username=user.username,
-            bio=bio,
-            incoming_text=display_msg,
-            category=category,
-            summary=report
-        )
-        msg_context = await db.get_message_by_admin_msg_id(dummy_admin_msg_id)
-        admin_memories = await db.get_all_admin_memories()
-        admin_memories_texts = [m['fact'] for m in admin_memories]
-
-        ai_response = await ai_agent.generate_response(
-            admin_instruction="Siz hozir AVTOPILOT rejimidasiz. Mahmud hozir band. Suhbatdosh bilan mantiqan to'g'ri, qoidalar va xotiralarga tayangan holda mustaqil javob yozib yuboring.",
-            context=msg_context,
-            recent_context=recent_context,
-            past_memories=past_memories,
-            admin_memories=admin_memories_texts
-        )
-        
-        draft_text = ai_response.get("draft_text", "")
-        if draft_text:
-            try:
-                await client.send_message(chat_id=user.id, text=draft_text)
-                await db.update_message_response(dummy_admin_msg_id, draft_text)
-                logger.info(f"Autopilot sent response to {user.id}")
-            except Exception as e:
-                logger.error(f"Autopilot failed to send message: {e}")
-        return # Skip sending to admin
-    # -------------------------------------------------
-
-    # Format Telegram Admin Notification Card (Natural style)
-    notification_card = (
-        f"🔔 <b>Yangi xabar:</b>\n\n"
-        f"<i>{report}</i>\n\n"
-        f"💬 Bunga nima deb javob qaytaray? Qisqacha aytsangiz, o'zim chiroyli qilib yozib yuboraman!"
+    await db.save_incoming_message(
+        admin_msg_id=admin_msg_id,
+        user_id=user.id,
+        user_msg_id=message.id,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        username=user.username,
+        bio=bio,
+        incoming_text=display_msg,
+        category=category,
+        summary=report
     )
-
-    try:
-        # Send Notification Card to Admin Chat
-        admin_msg = await client.send_message(
-            chat_id=config.ADMIN_CHAT_ID,
-            text=notification_card,
-            parse_mode=filters.enums.ParseMode.HTML
-        )
-
-        # Save message mapping into SQLite database
-        await db.save_incoming_message(
-            admin_msg_id=admin_msg.id,
-            user_id=user.id,
-            user_msg_id=message.id,
-            first_name=user.first_name,
-            last_name=user.last_name,
-            username=user.username,
-            bio=bio,
-            incoming_text=display_msg,
-            category=category,
-            summary=report
-        )
-        logger.info(f"Notification sent to Admin Chat. Admin Message ID: {admin_msg.id}")
-    except RPCError as e:
-        logger.error(f"Failed to send admin notification message: {e}")
-    except Exception as e:
-        logger.error(f"Unexpected error in incoming message handler: {e}")
 
 @app.on_message(filters.chat(config.ADMIN_CHAT_ID) & filters.reply & ~filters.bot)
 async def handle_admin_reply(client: Client, message: Message):

@@ -17,11 +17,21 @@ client_llm = AsyncOpenAI(
 )
 
 LEARN_PROFILE_PROMPT = """
-Siz inson xulq-atvori va yozish uslubi (Tone of Voice) bo'yicha ekspertsiz. 
-Foydalanuvchining (Mahmud) turli odamlar bilan yozishgan xabarlari to'plami beriladi. 
-Vazifangiz: Mahmudning umumiy yozish uslubi, qisqalik/uzunligi, ishlatadigan so'zlari (masalan lotin, kirill, xato yozishi, shevasi), va odatda qanday emojilardan foydalanishi haqida to'liq XULOSA yozib berish. 
-Bu xulosa keyinchalik bot tomonidan Mahmudning nomidan aniq nusxa ko'chirib yozish uchun 'System Prompt' sifatida ishlatiladi.
-Faqat o'zbek tilida, aniq va lo'nda qilib yozing.
+Siz inson xulq-atvori va yozish uslubi (Tone of Voice / Style Mimicry) bo'yicha yuqori darajali ekspertsiz.
+Sizga foydalanuvchining (Mahmud) turli odamlar bilan yozishgan real Telegram xabarlari to'plami beriladi.
+
+SIZNING ENG ASOSIY TOP-PRIORITET VAZIFANGIZ:
+Mahmudning yozish uslubidan NUKTAMA-NUKTA NUSXA KO'CHIRISH (MIMIC) qilish uchun mukammal Yo'riqnoma (Tone of Voice System Prompt) tuzib berish.
+
+QUYIDAGILARNI ANIQ TAHLIL QILING:
+1. ALFABET VA HARFLAR: Lotincha yoki Kirillcha yozadimi? Bosh harflar (Capitalization) ishlatadimi yoki hammasini kichik harflarda yozadimi?
+2. PUNKTUATSIYA: Nuqta, vergul, so'roq belgilarini qo'yadimi yoki mutlaqo ishlatmaydimi?
+3. SO'ZLAR VA SLANG: Odatda qaysi sevimli so'zlar, iboralar va qisqartmalarni ishlatadi (masalan: "xop", "ok", "ha", "brat", "aka", "tushundim", "yaxshi", "ertaga" h.k.)?
+4. GAP UZUNLIGI: Gaplari qisqa 1-3 so'zdan iboratmi yoki uzun va batafsilmi?
+5. EMOJILAR: Qaysi emojilarni ishlatadi yoki emojilarni umuman ishlatmaydimi?
+
+XULOSA BO'LIMI (BOT UCHUN ANIQ KO'RSATMA):
+Endi bot Mahmud nomidan yozganda xuddi Mahmuddek yozishi uchun 5 ta eng muhim qoidani ko'rsatib bering.
 """
 
 LEARN_CONTEXT_PROMPT = """
@@ -30,10 +40,10 @@ Vazifangiz: Mahmud ushbu aniq inson bilan qanday munosabatda? (Hurmat bilanmi, d
 Ushbu munosabatning 1-2 jumlalik qisqacha ta'rifini o'zbek tilida yozing.
 """
 
-async def extract_dialogs(client: Client, limit: int = 20) -> List[Any]:
+async def extract_dialogs(client: Client, limit: int = 35) -> List[Any]:
     dialogs = []
     my_id = client.me.id if getattr(client, 'me', None) else None
-    async for dialog in client.get_dialogs(limit=50):
+    async for dialog in client.get_dialogs(limit=60):
         if dialog.chat and dialog.chat.type == ChatType.PRIVATE:
             # Skip self (Saved Messages)
             if my_id and dialog.chat.id == my_id:
@@ -45,7 +55,7 @@ async def extract_dialogs(client: Client, limit: int = 20) -> List[Any]:
                 break
     return dialogs
 
-async def extract_chat_history(client: Client, chat_id: int, limit: int = 50) -> List[Dict[str, str]]:
+async def extract_chat_history(client: Client, chat_id: int, limit: int = 60) -> List[Dict[str, str]]:
     history = []
     try:
         async for msg in client.get_chat_history(chat_id, limit=limit):
@@ -64,18 +74,18 @@ async def extract_chat_history(client: Client, chat_id: int, limit: int = 50) ->
 
 async def analyze_overall_profile(all_my_messages: List[str]) -> str:
     if not all_my_messages:
-        return "Umumiy va odatiy yozish uslubi."
+        return "Odatiy samimiy yozish uslubi."
     
-    text_data = "\n".join(all_my_messages[:200]) # Limit to avoid huge context
+    text_data = "\n".join([f"- {msg}" for msg in all_my_messages[:350]])
     
     try:
         response = await client_llm.chat.completions.create(
             model=OPENAI_MODEL,
             messages=[
                 {"role": "system", "content": LEARN_PROFILE_PROMPT},
-                {"role": "user", "content": f"Mahmudning xabarlari:\n{text_data}"}
+                {"role": "user", "content": f"MAHMUDNING REAL TELEGRAM XABARLARI:\n{text_data}"}
             ],
-            max_completion_tokens=500
+            max_completion_tokens=700
         )
         return response.choices[0].message.content.strip()
     except Exception as e:

@@ -1,7 +1,7 @@
 import aiosqlite
 import logging
 from typing import Optional, Dict, Any, List
-from config import DB_PATH
+from config import DB_PATH, ENABLE_TELEGRAM_BRAIN_BACKUP
 
 logger = logging.getLogger(__name__)
 
@@ -353,7 +353,7 @@ async def add_memory(user_id: int, fact: str) -> bool:
             )
             await db.commit()
 
-            if _pyrogram_client:
+            if _pyrogram_client and ENABLE_TELEGRAM_BRAIN_BACKUP:
                 try:
                     await _pyrogram_client.send_message("me", f"🧠 <b>AI MEMORY BACKUP</b> #AI_BRAIN_BACKUP\nUSER:{user_id}\nFACT:{fact}")
                 except Exception as e:

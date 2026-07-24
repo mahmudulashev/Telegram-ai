@@ -521,6 +521,38 @@
             background: rgba(0,0,0,0.15);
             display: flex; gap: 10px;
         }
+        .quick-action-bar {
+            display: flex;
+            gap: 10px;
+            padding: 10px 18px 2px 18px;
+            background: rgba(0,0,0,0.15);
+            border-top: 1px solid var(--border);
+        }
+        .quick-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            padding: 9px 12px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .quick-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: var(--accent-1);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(79, 156, 247, 0.2);
+        }
+        .quick-btn:active {
+            transform: translateY(0);
+        }
         .modal-input-area input {
             flex: 1;
             background: rgba(255,255,255,0.04);
@@ -834,6 +866,14 @@
                 <button class="modal-close" onclick="closeChat()"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body" id="chat-messages-container"></div>
+            <div class="quick-action-bar">
+                <button class="quick-btn" onclick="sendQuickAction('Short tahlil qil')">
+                    <i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> Short tahlil qil
+                </button>
+                <button class="quick-btn" onclick="sendQuickAction('O\'zing javob yoz')">
+                    <i class="fa-solid fa-wand-magic-sparkles" style="color: #8b5cf6;"></i> O'zing javob yoz
+                </button>
+            </div>
             <div class="modal-input-area">
                 <input type="text" id="chat-input" placeholder="Yordamchiga yozing..." onkeypress="handleChatKeyPress(event)">
                 <button class="btn-send" onclick="sendChatMessage()"><i class="fa-solid fa-paper-plane"></i></button>
@@ -1024,6 +1064,12 @@
         }
 
         function handleChatKeyPress(e) { if (e.key === 'Enter') sendChatMessage(); }
+
+        function sendQuickAction(instruction) {
+            const input = document.getElementById('chat-input');
+            input.value = instruction;
+            sendChatMessage();
+        }
 
         async function sendChatMessage() {
             const input = document.getElementById('chat-input');

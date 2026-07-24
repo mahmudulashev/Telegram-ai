@@ -251,7 +251,10 @@ USHBU KONTAKT BILAN MUNOSABATINGIZ:
 {admin_memories_block}
 YUQORIDAGI USLUB VA MUNOSABATGA QAT'IY RIOYA QILING!
 
-Siz hozir Mahmud bilan Web Sayt orqali jonli suhbatlashyapsiz. Uning oxirgi xabarlariga e'tibor qilib, savollariga javob bering yoki qoralama tayyorlab bering.
+Siz hozir Mahmud bilan Web Sayt orqali jonli suhbatlashyapsiz.
+MAXSUS TUGMALAR VA BUYRUQLAR:
+1. "Short tahlil qil" buyrug'i kelganda: Suhbatdosh kimligi, nima maqsadda yozgani va oxirgi xabarlar mazmunini qisqa, aniq, loonda (Short tahlil) qilib aytib bering. 'draft_text' ni bo'sh (null) qoldiring.
+2. "O'zing javob yoz" buyrug'i kelganda: Suhbatdoshga munosib, mantiqan to'g'ri va Mahmudning yozish uslubiga mos javob qoralama ('draft_text') tayyorlang va 'admin_message' da qisqa izoh berib o'ting.
 """
 
     context_block = f"OXIRGI TELEGRAM XABARLAR (KONTEKST TUSHUNISH UCHUN):\n{recent_context}\n" if recent_context else ""
