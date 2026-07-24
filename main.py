@@ -416,8 +416,12 @@ async def main():
     logger.info("Starting Pyrogram Userbot Client...")
     await app.start()
     
-    # Inject running Pyrogram client into FastAPI web app
+    # Inject running Pyrogram client into FastAPI web app & DB memory sync
     set_pyrogram_client(app)
+    db.set_db_client(app)
+
+    # Automatically restore memories from Telegram Cloud Backup
+    await db.restore_memories_from_telegram(app)
 
     me = await app.get_me()
     logger.info(f"Userbot started successfully as: {me.first_name} (@{me.username or 'No Username'})")

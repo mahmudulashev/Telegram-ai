@@ -331,10 +331,19 @@ async def get_contact_context(user_id: int) -> Optional[str]:
                 return row[0]
             return None
 
+_pyrogram_client = None
+
+def set_db_client(client):
+    global _pyrogram_client
+    _pyrogram_client = client
+
 async def add_memory(user_id: int, fact: str) -> bool:
-    """Save a newly extracted memory fact to the database."""
+    """Save a newly extracted memory fact to the database and backup to Telegram."""
     async with aiosqlite.connect(DB_PATH) as db:
         try:
+            async with db.execute("SELECT id FROM memories WHERE user_id = ? AND fact = ?", (user_id, fact)) as cursor:
+                if await cursor.fetchone():
+                    return False
             await db.execute(
                 """
                 INSERT INTO memories (user_id, fact)
@@ -343,10 +352,41 @@ async def add_memory(user_id: int, fact: str) -> bool:
                 (user_id, fact)
             )
             await db.commit()
+
+            if _pyrogram_client:
+                try:
+                    await _pyrogram_client.send_message("me", f"🧠 <b>AI MEMORY BACKUP</b> #AI_BRAIN_BACKUP\nUSER:{user_id}\nFACT:{fact}")
+                except Exception as e:
+                    logger.debug(f"Failed to backup memory to Telegram: {e}")
             return True
         except Exception as e:
             logger.error(f"Failed to save memory for {user_id}: {e}")
             return False
+
+async def restore_memories_from_telegram(client):
+    """Restore memories from Telegram Saved Messages backup."""
+    if not client:
+        return
+    try:
+        logger.info("Restoring AI Memories from Telegram Saved Messages backup...")
+        restored = 0
+        async for msg in client.get_chat_history("me", limit=100):
+            if msg.text and "#AI_BRAIN_BACKUP" in msg.text:
+                lines = msg.text.split("\n")
+                uid = 0
+                fact = ""
+                for line in lines:
+                    if line.startswith("USER:"):
+                        try: uid = int(line.replace("USER:", "").strip())
+                        except: pass
+                    elif line.startswith("FACT:"):
+                        fact = line.replace("FACT:", "").strip()
+                if fact:
+                    saved = await add_memory(uid, fact)
+                    if saved: restored += 1
+        logger.info(f"Restored {restored} memories from Telegram cloud backup.")
+    except Exception as e:
+        logger.warning(f"Error restoring memories from Telegram: {e}")
 
 async def get_memories(user_id: int, limit: int = 10) -> List[str]:
     """Retrieve recent memories associated with a specific user."""
@@ -454,12 +494,12 @@ async def get_active_autopilots() -> Dict[int, Dict[str, Any]]:
             return result
 
 async def is_autopilot_active(user_id: int) -> bool:
-    """Check if autopilot is active for the given user."""
+    """Check if autopilot is active for the given user OR globally for all users (user_id = 0)."""
     import time
     current_time = int(time.time())
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
-            "SELECT expires_at FROM autopilot WHERE user_id = ?", 
+            "SELECT expires_at FROM autopilot WHERE user_id = ? OR user_id = 0 ORDER BY expires_at DESC LIMIT 1", 
             (user_id,)
         ) as cursor:
             row = await cursor.fetchone()
@@ -467,13 +507,12 @@ async def is_autopilot_active(user_id: int) -> bool:
                 if row[0] > current_time:
                     return True
                 else:
-                    # Expired, clean it up
                     await db.execute("DELETE FROM autopilot WHERE user_id = ?", (user_id,))
                     await db.commit()
             return False
 
 async def disable_autopilot(user_id: int) -> bool:
-    """Manually disable autopilot for a user."""
+    """Manually disable autopilot for a user (or global autopilot if user_id=0)."""
     async with aiosqlite.connect(DB_PATH) as db:
         try:
             await db.execute("DELETE FROM autopilot WHERE user_id = ?", (user_id,))
@@ -481,6 +520,26 @@ async def disable_autopilot(user_id: int) -> bool:
             return True
         except Exception as e:
             return False
+
+async def set_global_autopilot(enabled: bool, hours: int = 87600) -> bool:
+    """Enable or disable global autopilot for ALL chats (user_id = 0)."""
+    if enabled:
+        import time
+        expires_at = int(time.time()) + (hours * 3600)
+        return await set_autopilot_until(0, expires_at)
+    else:
+        return await disable_autopilot(0)
+
+async def is_global_autopilot_active() -> bool:
+    """Check if global autopilot is currently active."""
+    import time
+    current_time = int(time.time())
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT expires_at FROM autopilot WHERE user_id = 0", 
+        ) as cursor:
+            row = await cursor.fetchone()
+            return bool(row and row[0] > current_time)
 
 async def clear_historical_messages() -> int:
     """Clean up dummy imported history messages from the main feed."""

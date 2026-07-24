@@ -801,7 +801,16 @@
                 </div>
             </div>
 
-            <div class="sidebar">
+                <div class="side-panel glass" style="border:1px solid rgba(168, 85, 247, 0.25);">
+                    <h3><i class="fa-solid fa-robot" style="color:var(--accent-2)"></i> Global Avtopilot (24/7)</h3>
+                    <p style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:10px;">
+                        Barcha Telegram chatlaringizga AI mustaqil ravishda o'zi javob yoza oladi.
+                    </p>
+                    <div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:12px; border:1px solid var(--border);">
+                        <span style="font-size:0.82rem; font-weight:700;" id="global-ap-status-text">O'chirilgan</span>
+                        <button class="btn-small" id="global-ap-btn" onclick="toggleGlobalAutopilot()" style="background:var(--accent-2); color:#fff; border:none; font-weight:700;">Yoqish</button>
+                    </div>
+                </div>
                 <div class="side-panel glass">
                     <h3><i class="fa-solid fa-sliders" style="color:var(--accent-2)"></i> Uslub sozlamalari</h3>
                     <div class="rule-row"><i class="fa-solid fa-language"></i> <span><b>Til:</b> Tabiiy o'zbek tili</span></div>
@@ -814,7 +823,6 @@
                     <div class="rule-row"><i class="fa-solid fa-brain"></i> <span id="model-name">Model: yuklanmoqda...</span></div>
                     <div class="rule-row"><i class="fa-solid fa-paper-plane"></i> <span>Manzil: Saved Messages</span></div>
                 </div>
-            </div>
         </div>
     </main>
 

@@ -281,6 +281,21 @@ async def sync_telegram_history(payload: SyncHistoryRequest):
         logger.error(f"Error syncing and learning history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+class GlobalAutopilotRequest(BaseModel):
+    enabled: bool
+
+@app.get("/api/autopilot/global")
+async def get_global_autopilot_status():
+    """Check if global autopilot is enabled for all chats."""
+    active = await db.is_global_autopilot_active()
+    return JSONResponse({"success": True, "global_autopilot": active})
+
+@app.post("/api/autopilot/global")
+async def toggle_global_autopilot(payload: GlobalAutopilotRequest):
+    """Enable or disable global autopilot for all chats."""
+    success = await db.set_global_autopilot(payload.enabled)
+    return JSONResponse({"success": success, "global_autopilot": payload.enabled})
+
 @app.get("/api/autopilot")
 async def get_autopilots():
     """Retrieve all active autopilot sessions."""
