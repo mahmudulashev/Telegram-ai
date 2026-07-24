@@ -1152,26 +1152,53 @@
             const c = document.getElementById('brain-messages-container');
             c.innerHTML = `<div style="text-align:center;color:var(--text-dim);margin-top:20px;"><i class="fa-solid fa-spinner fa-spin"></i></div>`;
             try {
-                const res = await fetch('/api/admin_memories');
-                const data = await res.json();
-                const mems = data.memories || [];
-                if (mems.length === 0) {
+                const [resMems, resRules] = await Promise.all([
+                    fetch('/api/admin_memories'),
+                    fetch('/api/style_rules').catch(() => ({ json: () => ({ style_rules: [] }) }))
+                ]);
+                const dataMems = await resMems.json();
+                const dataRules = await resRules.json();
+                const mems = dataMems.memories || [];
+                const rules = dataRules.style_rules || [];
+                
+                if (mems.length === 0 && rules.length === 0) {
                     c.innerHTML = `<div class="empty-state"><i class="fa-solid fa-brain" style="font-size:2rem;color:var(--text-dim);margin-bottom:10px;"></i><p style="font-size:0.85rem;">Hozircha xotira yo'q. Chat orqali qoidalar o'rgating.</p></div>`;
                     return;
                 }
-                c.innerHTML = mems.map(m => `
-                    <div class="bubble draft" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;width:100%;max-width:100%;">
-                        <div style="flex:1;">
-                            <i class="fa-solid fa-thumbtack" style="margin-right:8px;opacity:0.6;"></i>${escapeHtml(m.fact)}
-                            <br><small style="color:var(--text-dim);font-size:0.72rem;">${m.created_at}</small>
+                
+                let html = '';
+                if (rules.length > 0) {
+                    html += `<h4 style="color:var(--primary);margin:10px 0;font-size:0.9rem;"><i class="fa-solid fa-pen-nib"></i> Yozish Uslubi Qoidalari</h4>`;
+                    html += rules.map(r => `
+                        <div class="bubble draft" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;width:100%;max-width:100%;margin-bottom:8px;">
+                            <div style="flex:1;">
+                                <i class="fa-solid fa-magic" style="margin-right:8px;opacity:0.6;"></i>${escapeHtml(r.rule)}
+                                <br><small style="color:var(--text-dim);font-size:0.72rem;">${r.created_at}</small>
+                            </div>
+                            <button onclick="deleteStyleRule(${r.id})" style="background:rgba(255,71,87,0.1);color:var(--urgent);border:1px solid rgba(255,71,87,0.2);padding:5px 10px;border-radius:8px;cursor:pointer;transition:0.2s;flex-shrink:0;">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
                         </div>
-                        <button onclick="deleteBrainMemory(${m.id})" style="background:rgba(255,71,87,0.1);color:var(--urgent);border:1px solid rgba(255,71,87,0.2);padding:5px 10px;border-radius:8px;cursor:pointer;transition:0.2s;flex-shrink:0;">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
-                    </div>
-                `).join('');
+                    `).join('');
+                }
+
+                if (mems.length > 0) {
+                    html += `<h4 style="color:var(--primary);margin:15px 0 10px 0;font-size:0.9rem;"><i class="fa-solid fa-list-check"></i> O'rganilgan Faktlar</h4>`;
+                    html += mems.map(m => `
+                        <div class="bubble draft" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;width:100%;max-width:100%;margin-bottom:8px;">
+                            <div style="flex:1;">
+                                <i class="fa-solid fa-thumbtack" style="margin-right:8px;opacity:0.6;"></i>${escapeHtml(m.fact)}
+                                <br><small style="color:var(--text-dim);font-size:0.72rem;">${m.created_at}</small>
+                            </div>
+                            <button onclick="deleteBrainMemory(${m.id})" style="background:rgba(255,71,87,0.1);color:var(--urgent);border:1px solid rgba(255,71,87,0.2);padding:5px 10px;border-radius:8px;cursor:pointer;transition:0.2s;flex-shrink:0;">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    `).join('');
+                }
+                c.innerHTML = html;
             } catch (e) {
-                c.innerHTML = `<div class="bubble ai" style="color:var(--urgent)">Tarmoq xatosi!</div>`;
+                c.innerHTML = `<div class="bubble ai" style="color:var(--urgent)">Tarmoq xatosi yoki Xotira topilmadi! (Siz serverni o'chirib yoqqan bo'lishingiz mumkin, yoki jadvallar topilmadi)</div>`;
             }
         }
 
@@ -1179,6 +1206,15 @@
             if (!confirm("Bu xotirani o'chiramizmi?")) return;
             try {
                 const res = await fetch(`/api/admin_memories/${id}`, { method: 'DELETE' });
+                if (res.ok) loadBrainMemories();
+                else alert("Xatolik");
+            } catch (e) { alert("Tarmoq xatosi!"); }
+        }
+
+        async function deleteStyleRule(id) {
+            if (!confirm("Bu qoidani o'chiramizmi?")) return;
+            try {
+                const res = await fetch(`/api/style_rules/${id}`, { method: 'DELETE' });
                 if (res.ok) loadBrainMemories();
                 else alert("Xatolik");
             } catch (e) { alert("Tarmoq xatosi!"); }

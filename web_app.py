@@ -206,6 +206,12 @@ async def get_admin_memories():
     memories = await db.get_all_admin_memories()
     return JSONResponse({"memories": memories})
 
+@app.get("/api/style_rules")
+async def get_api_style_rules():
+    """Return all style rules the AI learned."""
+    rules = await db.get_style_rules()
+    return JSONResponse({"style_rules": rules})
+
 @app.delete("/api/admin_memories/{mem_id}")
 async def delete_admin_memory(mem_id: int):
     """Delete a specific learned fact."""
@@ -213,6 +219,14 @@ async def delete_admin_memory(mem_id: int):
     if success:
         return JSONResponse({"success": True})
     raise HTTPException(status_code=500, detail="Failed to delete memory")
+
+@app.delete("/api/style_rules/{rule_id}")
+async def delete_style_rule(rule_id: int):
+    """Delete a specific style rule."""
+    async with aiosqlite.connect(db.DB_PATH) as conn:
+        await conn.execute("DELETE FROM style_rules WHERE id = ?", (rule_id,))
+        await conn.commit()
+    return JSONResponse({"success": True})
 
 @app.post("/api/send_draft")
 async def send_web_draft(payload: SendDraftRequest):
